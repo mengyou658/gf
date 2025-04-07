@@ -18,7 +18,7 @@
 ![Forks](https://img.shields.io/github/forks/gogf/gf?style=flat)
 
 </div>
-
+增加BeforeHook用户字段填充和租户逻辑也可以用户数据权限等，具体怎么使用请看提交的代码（使用类似Hook的方式），只改了几个地方
 A powerful framework for faster, easier, and more efficient project development.
 
 
