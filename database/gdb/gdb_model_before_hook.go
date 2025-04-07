@@ -29,28 +29,28 @@ type BeforeHookHandler struct {
 // Note that, COUNT statement will also be hooked by this feature,
 // which is usually not be interesting for upper business hook handler.
 type BeforeHookSelectInput struct {
-	handler BeforeHookFuncSelect
+	handler []BeforeHookHandler
 	Model   *Model // Current operation Model.
 	Table   string // The table name that to be used. Update this attribute to change target table name.
 }
 
 // BeforeHookInsertInput holds the parameters for insert hook operation.
 type BeforeHookInsertInput struct {
-	handler BeforeHookFuncInsert
+	handler []BeforeHookHandler
 	Model   *Model // Current operation Model.
 	Table   string // The table name that to be used. Update this attribute to change target table name.
 }
 
 // BeforeHookUpdateInput holds the parameters for update hook operation.
 type BeforeHookUpdateInput struct {
-	handler BeforeHookFuncUpdate
+	handler []BeforeHookHandler
 	Model   *Model // Current operation Model.
 	Table   string // The table name that to be used. Update this attribute to change target table name.
 }
 
 // BeforeHookDeleteInput holds the parameters for delete hook operation.
 type BeforeHookDeleteInput struct {
-	handler BeforeHookFuncDelete
+	handler []BeforeHookHandler
 	Model   *Model // Current operation Model.
 	Table   string // The table name that to be used. Update this attribute to change target table name.
 }
@@ -60,7 +60,12 @@ func (h *BeforeHookSelectInput) Next(ctx context.Context) (err error) {
 	if h.handler != nil {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
-		err := h.handler(ctx, h)
+		for _, handle := range h.handler {
+			err := handle.Select(ctx, h)
+			if err != nil {
+				return err
+			}
+		}
 		h.Model.Safe(safeOld)
 		return err
 	}
@@ -72,7 +77,12 @@ func (h *BeforeHookInsertInput) Next(ctx context.Context) (err error) {
 	if h.handler != nil {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
-		err := h.handler(ctx, h)
+		for _, handle := range h.handler {
+			err := handle.Insert(ctx, h)
+			if err != nil {
+				return err
+			}
+		}
 		h.Model.Safe(safeOld)
 		return err
 	}
@@ -84,7 +94,12 @@ func (h *BeforeHookUpdateInput) Next(ctx context.Context) (err error) {
 	if h.handler != nil {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
-		err := h.handler(ctx, h)
+		for _, handle := range h.handler {
+			err := handle.Update(ctx, h)
+			if err != nil {
+				return err
+			}
+		}
 		h.Model.Safe(safeOld)
 		return err
 	}
@@ -97,7 +112,12 @@ func (h *BeforeHookDeleteInput) Next(ctx context.Context) (err error) {
 	if h.handler != nil {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
-		err := h.handler(ctx, h)
+		for _, handle := range h.handler {
+			err := handle.Delete(ctx, h)
+			if err != nil {
+				return err
+			}
+		}
 		h.Model.Safe(safeOld)
 		return err
 	}
@@ -106,8 +126,8 @@ func (h *BeforeHookDeleteInput) Next(ctx context.Context) (err error) {
 }
 
 // BeforeHook sets the hook functions for current model.
-func (m *Model) BeforeHook(hook BeforeHookHandler) *Model {
+func (m *Model) BeforeHook(hook ...BeforeHookHandler) *Model {
 	model := m.getModel()
-	model.beforeHookHandler = hook
+	model.beforeHookHandlers = hook
 	return model
 }

@@ -45,7 +45,7 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 	// beforeHook
 	beforeHook := BeforeHookUpdateInput{
 		Model:   m,
-		handler: m.beforeHookHandler.Update,
+		handler: m.beforeHookHandlers,
 		Table:   m.tables,
 	}
 	err = beforeHook.Next(ctx)

@@ -259,7 +259,7 @@ func (m *Model) doInsertWithOption(ctx context.Context, insertOption InsertOptio
 	// beforeHook
 	beforeHook := BeforeHookInsertInput{
 		Model:   m,
-		handler: m.beforeHookHandler.Insert,
+		handler: m.beforeHookHandlers,
 		Table:   m.tables,
 	}
 	err = beforeHook.Next(ctx)

@@ -29,7 +29,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 		// beforeHook
 		beforeHook := BeforeHookUpdateInput{
 			Model:   m,
-			handler: m.beforeHookHandler.Update,
+			handler: m.beforeHookHandlers,
 			Table:   m.tables,
 		}
 		err = beforeHook.Next(ctx)
@@ -40,7 +40,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 		// beforeHook
 		beforeHook := BeforeHookDeleteInput{
 			Model:   m,
-			handler: m.beforeHookHandler.Delete,
+			handler: m.beforeHookHandlers,
 			Table:   m.tables,
 		}
 		err = beforeHook.Next(ctx)

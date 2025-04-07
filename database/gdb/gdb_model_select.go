@@ -417,7 +417,7 @@ func (m *Model) Value(fieldsAndWhere ...interface{}) (Value, error) {
 	// beforeHook
 	beforeHook := BeforeHookSelectInput{
 		Model:   m,
-		handler: m.beforeHookHandler.Select,
+		handler: m.beforeHookHandlers,
 		Table:   m.tables,
 	}
 	var err = beforeHook.Next(ctx)
@@ -488,7 +488,7 @@ func (m *Model) Count(where ...interface{}) (int, error) {
 	// beforeHook
 	beforeHook := BeforeHookSelectInput{
 		Model:   m,
-		handler: m.beforeHookHandler.Select,
+		handler: m.beforeHookHandlers,
 		Table:   m.tables,
 	}
 	var err = beforeHook.Next(ctx)
@@ -687,7 +687,7 @@ func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool
 	// beforeHook
 	beforeHook := BeforeHookSelectInput{
 		Model:   m,
-		handler: m.beforeHookHandler.Select,
+		handler: m.beforeHookHandlers,
 		Table:   m.tables,
 	}
 	var err = beforeHook.Next(ctx)
