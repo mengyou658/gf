@@ -41,6 +41,18 @@ func (m *Model) Update(dataAndWhere ...interface{}) (result sql.Result, err erro
 			m.checkAndRemoveSelectCache(ctx)
 		}
 	}()
+
+	// beforeHook
+	beforeHook := BeforeHookUpdateInput{
+		Model:   m,
+		handler: m.beforeHookHandler.Update,
+		Table:   m.tables,
+	}
+	err = beforeHook.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if m.data == nil {
 		return nil, gerror.NewCode(gcode.CodeMissingParameter, "updating table with empty data")
 	}

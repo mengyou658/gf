@@ -256,6 +256,17 @@ func (m *Model) doInsertWithOption(ctx context.Context, insertOption InsertOptio
 			m.checkAndRemoveSelectCache(ctx)
 		}
 	}()
+	// beforeHook
+	beforeHook := BeforeHookInsertInput{
+		Model:   m,
+		handler: m.beforeHookHandler.Insert,
+		Table:   m.tables,
+	}
+	err = beforeHook.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if m.data == nil {
 		return nil, gerror.NewCode(gcode.CodeMissingParameter, "inserting into table with empty data")
 	}
@@ -316,6 +327,7 @@ func (m *Model) doInsertWithOption(ctx context.Context, insertOption InsertOptio
 			list[k] = v
 		}
 	}
+
 	// Format DoInsertOption, especially for "ON DUPLICATE KEY UPDATE" statement.
 	columnNames := make([]string, 0, len(list[0]))
 	for k := range list[0] {

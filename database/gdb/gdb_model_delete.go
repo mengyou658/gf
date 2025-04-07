@@ -20,6 +20,35 @@ import (
 // see Model.Where.
 func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 	var ctx = m.GetCtx()
+	var fieldNameDelete, fieldTypeDelete = m.softTimeMaintainer().GetFieldNameAndTypeForDelete(
+		ctx, "", m.tablesInit,
+	)
+
+	// Soft deleting.
+	if fieldNameDelete != "" {
+		// beforeHook
+		beforeHook := BeforeHookUpdateInput{
+			Model:   m,
+			handler: m.beforeHookHandler.Update,
+			Table:   m.tables,
+		}
+		err = beforeHook.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// beforeHook
+		beforeHook := BeforeHookDeleteInput{
+			Model:   m,
+			handler: m.beforeHookHandler.Delete,
+			Table:   m.tables,
+		}
+		err = beforeHook.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).Delete()
 	}
@@ -31,9 +60,6 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 	var (
 		conditionWhere, conditionExtra, conditionArgs = m.formatCondition(ctx, false, false)
 		conditionStr                                  = conditionWhere + conditionExtra
-		fieldNameDelete, fieldTypeDelete              = m.softTimeMaintainer().GetFieldNameAndTypeForDelete(
-			ctx, "", m.tablesInit,
-		)
 	)
 	if m.unscoped {
 		fieldNameDelete = ""

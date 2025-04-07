@@ -414,10 +414,21 @@ func (m *Model) Value(fieldsAndWhere ...interface{}) (Value, error) {
 			return m.Fields(gconv.String(fieldsAndWhere[0])).Value()
 		}
 	}
+	// beforeHook
+	beforeHook := BeforeHookSelectInput{
+		Model:   m,
+		handler: m.beforeHookHandler.Select,
+		Table:   m.tables,
+	}
+	var err = beforeHook.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		sqlWithHolder, holderArgs = m.getFormattedSqlAndArgs(ctx, SelectTypeValue, true)
-		all, err                  = m.doGetAllBySql(ctx, SelectTypeValue, sqlWithHolder, holderArgs...)
 	)
+	all, err := m.doGetAllBySql(ctx, SelectTypeValue, sqlWithHolder, holderArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -474,10 +485,20 @@ func (m *Model) Count(where ...interface{}) (int, error) {
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).Count()
 	}
+	// beforeHook
+	beforeHook := BeforeHookSelectInput{
+		Model:   m,
+		handler: m.beforeHookHandler.Select,
+		Table:   m.tables,
+	}
+	var err = beforeHook.Next(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var (
 		sqlWithHolder, holderArgs = m.getFormattedSqlAndArgs(ctx, SelectTypeCount, false)
-		all, err                  = m.doGetAllBySql(ctx, SelectTypeCount, sqlWithHolder, holderArgs...)
 	)
+	all, err := m.doGetAllBySql(ctx, SelectTypeCount, sqlWithHolder, holderArgs...)
 	if err != nil {
 		return 0, err
 	}
@@ -663,6 +684,16 @@ func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).All()
 	}
+	// beforeHook
+	beforeHook := BeforeHookSelectInput{
+		Model:   m,
+		handler: m.beforeHookHandler.Select,
+		Table:   m.tables,
+	}
+	var err = beforeHook.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sqlWithHolder, holderArgs := m.getFormattedSqlAndArgs(ctx, selectType, limit1)
 	return m.doGetAllBySql(ctx, selectType, sqlWithHolder, holderArgs...)
 }
@@ -671,6 +702,7 @@ func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool
 func (m *Model) doGetAllBySql(
 	ctx context.Context, selectType SelectType, sql string, args ...interface{},
 ) (result Result, err error) {
+
 	if result, err = m.getSelectResultFromCache(ctx, sql, args...); err != nil || result != nil {
 		return
 	}

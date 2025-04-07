@@ -157,7 +157,7 @@ func (m *Model) doWithScanStruct(pointer interface{}) error {
 			}
 		}
 		// Recursively with feature checks.
-		model = m.db.With(field.Value).Hook(m.hookHandler)
+		model = m.db.With(field.Value).Hook(m.hookHandler).BeforeHook(m.beforeHookHandler)
 		if m.withAll {
 			model = model.WithAll()
 		} else {
@@ -283,7 +283,7 @@ func (m *Model) doWithScanStructs(pointer interface{}) error {
 			}
 		}
 		// Recursively with feature checks.
-		model = m.db.With(field.Value).Hook(m.hookHandler)
+		model = m.db.With(field.Value).Hook(m.hookHandler).BeforeHook(m.beforeHookHandler)
 		if m.withAll {
 			model = model.WithAll()
 		} else {
