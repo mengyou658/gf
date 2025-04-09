@@ -61,9 +61,11 @@ func (h *BeforeHookSelectInput) Next(ctx context.Context) (err error) {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
 		for _, handle := range h.handler {
-			err := handle.Select(ctx, h)
-			if err != nil {
-				return err
+			if handle.Select != nil {
+				err := handle.Select(ctx, h)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		h.Model.Safe(safeOld)
@@ -78,8 +80,10 @@ func (h *BeforeHookInsertInput) Next(ctx context.Context) (err error) {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
 		for _, handle := range h.handler {
-			err := handle.Insert(ctx, h)
-			if err != nil {
+			if handle.Insert != nil {
+				err := handle.Insert(ctx, h)
+				if err != nil {
+				}
 				return err
 			}
 		}
@@ -95,9 +99,11 @@ func (h *BeforeHookUpdateInput) Next(ctx context.Context) (err error) {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
 		for _, handle := range h.handler {
-			err := handle.Update(ctx, h)
-			if err != nil {
-				return err
+			if handle.Update != nil {
+				err := handle.Update(ctx, h)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		h.Model.Safe(safeOld)
@@ -113,9 +119,11 @@ func (h *BeforeHookDeleteInput) Next(ctx context.Context) (err error) {
 		safeOld := h.Model.safe
 		h.Model.Safe(false)
 		for _, handle := range h.handler {
-			err := handle.Delete(ctx, h)
-			if err != nil {
-				return err
+			if handle.Delete != nil {
+				err := handle.Delete(ctx, h)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		h.Model.Safe(safeOld)
