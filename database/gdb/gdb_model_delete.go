@@ -18,7 +18,7 @@ import (
 // Delete does "DELETE FROM ... " statement for the model.
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
+func (m *Model) Delete(where ...any) (result sql.Result, err error) {
 	var ctx = m.GetCtx()
 	var fieldNameDelete, fieldTypeDelete = m.softTimeMaintainer().GetFieldNameAndTypeForDelete(
 		ctx, "", m.tablesInit,
@@ -60,6 +60,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 	var (
 		conditionWhere, conditionExtra, conditionArgs = m.formatCondition(ctx, false, false)
 		conditionStr                                  = conditionWhere + conditionExtra
+		fieldNameDelete, fieldTypeDelete              = m.softTimeMaintainer().GetFieldInfo(ctx, "", m.tablesInit, SoftTimeFieldDelete)
 	)
 	if m.unscoped {
 		fieldNameDelete = ""
@@ -78,7 +79,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 
 	// Soft deleting.
 	if fieldNameDelete != "" {
-		dataHolder, dataValue := m.softTimeMaintainer().GetDataByFieldNameAndTypeForDelete(
+		dataHolder, dataValue := m.softTimeMaintainer().GetDeleteData(
 			ctx, "", fieldNameDelete, fieldTypeDelete,
 		)
 		in := &HookUpdateInput{
@@ -93,7 +94,7 @@ func (m *Model) Delete(where ...interface{}) (result sql.Result, err error) {
 			Schema:    m.schema,
 			Data:      dataHolder,
 			Condition: conditionStr,
-			Args:      append([]interface{}{dataValue}, conditionArgs...),
+			Args:      append([]any{dataValue}, conditionArgs...),
 		}
 		return in.Next(ctx)
 	}

@@ -26,7 +26,7 @@ import (
 //
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) All(where ...interface{}) (Result, error) {
+func (m *Model) All(where ...any) (Result, error) {
 	var ctx = m.GetCtx()
 	return m.doGetAll(ctx, SelectTypeDefault, false, where...)
 }
@@ -42,7 +42,7 @@ func (m *Model) All(where ...interface{}) (Result, error) {
 //	var model Model
 //	var result Result
 //	var count int
-//	where := []interface{}{"name = ?", "John"}
+//	where := []any{"name = ?", "John"}
 //	result, count, err := model.AllAndCount(true)
 //	if err != nil {
 //	    // Handle error.
@@ -52,9 +52,19 @@ func (m *Model) AllAndCount(useFieldForCount bool) (result Result, totalCount in
 	// Clone the model for counting
 	countModel := m.Clone()
 
-	// If useFieldForCount is false, set the fields to a constant value of 1 for counting
-	if !useFieldForCount {
-		countModel.fields = []any{Raw("1")}
+	// Decide how to build the COUNT() expression:
+	// - If caller explicitly wants to use the single field expression for counting,
+	//   honor it (e.g. Fields("DISTINCT col") with useFieldForCount = true).
+	// - Otherwise, clear fields to let Count() use its default COUNT(1),
+	//   avoiding invalid COUNT(field1, field2, ...) with multiple fields,
+	//   or incorrect COUNT(DISTINCT 1) when Distinct() is set.
+	if useFieldForCount && len(m.fields) == 1 {
+		countModel.fields = m.fields
+	} else {
+		countModel.fields = nil
+	}
+	if len(m.pageCacheOption) > 0 {
+		countModel = countModel.Cache(m.pageCacheOption[0])
 	}
 
 	// Get the total count of records
@@ -68,8 +78,13 @@ func (m *Model) AllAndCount(useFieldForCount bool) (result Result, totalCount in
 		return
 	}
 
+	resultModel := m.Clone()
+	if len(m.pageCacheOption) > 1 {
+		resultModel = resultModel.Cache(m.pageCacheOption[1])
+	}
+
 	// Retrieve all records
-	result, err = m.doGetAll(m.GetCtx(), SelectTypeDefault, false)
+	result, err = resultModel.doGetAll(m.GetCtx(), SelectTypeDefault, false)
 	return
 }
 
@@ -105,7 +120,7 @@ func (m *Model) Chunk(size int, handler ChunkHandler) {
 //
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) One(where ...interface{}) (Record, error) {
+func (m *Model) One(where ...any) (Record, error) {
 	var ctx = m.GetCtx()
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).One()
@@ -126,7 +141,7 @@ func (m *Model) One(where ...interface{}) (Record, error) {
 // If the optional parameter `fieldsAndWhere` is given, the fieldsAndWhere[0] is the selected fields
 // and fieldsAndWhere[1:] is treated as where condition fields.
 // Also see Model.Fields and Model.Where functions.
-func (m *Model) Array(fieldsAndWhere ...interface{}) ([]Value, error) {
+func (m *Model) Array(fieldsAndWhere ...any) (Array, error) {
 	if len(fieldsAndWhere) > 0 {
 		if len(fieldsAndWhere) > 2 {
 			return m.Fields(gconv.String(fieldsAndWhere[0])).Where(fieldsAndWhere[1], fieldsAndWhere[2:]...).Array()
@@ -192,7 +207,7 @@ func (m *Model) Array(fieldsAndWhere ...interface{}) ([]Value, error) {
 //
 // user := (*User)(nil)
 // err  := db.Model("user").Where("id", 1).Scan(&user).
-func (m *Model) doStruct(pointer interface{}, where ...interface{}) error {
+func (m *Model) doStruct(pointer any, where ...any) error {
 	model := m
 	// Auto selecting fields by struct attributes.
 	if len(model.fieldsEx) == 0 && len(model.fields) == 0 {
@@ -228,7 +243,7 @@ func (m *Model) doStruct(pointer interface{}, where ...interface{}) error {
 //
 // users := ([]*User)(nil)
 // err   := db.Model("user").Scan(&users).
-func (m *Model) doStructs(pointer interface{}, where ...interface{}) error {
+func (m *Model) doStructs(pointer any, where ...any) error {
 	model := m
 	// Auto selecting fields by struct attributes.
 	if len(model.fieldsEx) == 0 && len(model.fields) == 0 {
@@ -277,9 +292,9 @@ func (m *Model) doStructs(pointer interface{}, where ...interface{}) error {
 //
 // users := ([]*User)(nil)
 // err   := db.Model("user").Scan(&users).
-func (m *Model) Scan(pointer interface{}, where ...interface{}) error {
+func (m *Model) Scan(pointer any, where ...any) error {
 	reflectInfo := reflection.OriginTypeAndKind(pointer)
-	if reflectInfo.InputKind != reflect.Ptr {
+	if reflectInfo.InputKind != reflect.Pointer {
 		return gerror.NewCode(
 			gcode.CodeInvalidParameter,
 			`the parameter "pointer" for function Scan should type of pointer`,
@@ -330,14 +345,23 @@ func (m *Model) Scan(pointer interface{}, where ...interface{}) error {
 //		Fields("u1.passport,u1.id,u2.name,u2.age").
 //		Where("u1.id<2").
 //		ScanAndCount(&users, &count, false)
-func (m *Model) ScanAndCount(pointer interface{}, totalCount *int, useFieldForCount bool) (err error) {
+func (m *Model) ScanAndCount(pointer any, totalCount *int, useFieldForCount bool) (err error) {
 	// support Fields with *, example: .Fields("a.*, b.name"). Count sql is select count(1) from xxx
 	countModel := m.Clone()
-	// If useFieldForCount is false, set the fields to a constant value of 1 for counting
-	if !useFieldForCount {
-		countModel.fields = []any{Raw("1")}
+	// Decide how to build the COUNT() expression:
+	// - If caller explicitly wants to use the single field expression for counting,
+	//   honor it (e.g. Fields("DISTINCT col") with useFieldForCount = true).
+	// - Otherwise, clear fields to let Count() use its default COUNT(1),
+	//   avoiding invalid COUNT(field1, field2, ...) with multiple fields,
+	//   or incorrect COUNT(DISTINCT 1) when Distinct() is set.
+	if useFieldForCount && len(m.fields) == 1 {
+		countModel.fields = m.fields
+	} else {
+		countModel.fields = nil
 	}
-
+	if len(m.pageCacheOption) > 0 {
+		countModel = countModel.Cache(m.pageCacheOption[0])
+	}
 	// Get the total count of records
 	*totalCount, err = countModel.Count()
 	if err != nil {
@@ -348,7 +372,11 @@ func (m *Model) ScanAndCount(pointer interface{}, totalCount *int, useFieldForCo
 	if *totalCount == 0 {
 		return
 	}
-	err = m.Scan(pointer)
+	scanModel := m.Clone()
+	if len(m.pageCacheOption) > 1 {
+		scanModel = scanModel.Cache(m.pageCacheOption[1])
+	}
+	err = scanModel.Scan(pointer)
 	return
 }
 
@@ -356,7 +384,7 @@ func (m *Model) ScanAndCount(pointer interface{}, totalCount *int, useFieldForCo
 // Note that the parameter `listPointer` should be type of *[]struct/*[]*struct.
 //
 // See Result.ScanList.
-func (m *Model) ScanList(structSlicePointer interface{}, bindToAttrName string, relationAttrNameAndFields ...string) (err error) {
+func (m *Model) ScanList(structSlicePointer any, bindToAttrName string, relationAttrNameAndFields ...string) (err error) {
 	var result Result
 	out, err := checkGetSliceElementInfoForScanList(structSlicePointer, bindToAttrName)
 	if err != nil {
@@ -400,7 +428,7 @@ func (m *Model) ScanList(structSlicePointer interface{}, bindToAttrName string, 
 // If the optional parameter `fieldsAndWhere` is given, the fieldsAndWhere[0] is the selected fields
 // and fieldsAndWhere[1:] is treated as where condition fields.
 // Also see Model.Fields and Model.Where functions.
-func (m *Model) Value(fieldsAndWhere ...interface{}) (Value, error) {
+func (m *Model) Value(fieldsAndWhere ...any) (Value, error) {
 	var (
 		core = m.db.GetCore()
 		ctx  = core.injectInternalColumn(m.GetCtx())
@@ -477,7 +505,7 @@ func (m *Model) getRecordFields(record Record) []string {
 // Count does "SELECT COUNT(x) FROM ..." statement for the model.
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) Count(where ...interface{}) (int, error) {
+func (m *Model) Count(where ...any) (int, error) {
 	var (
 		core = m.db.GetCore()
 		ctx  = core.injectInternalColumn(m.GetCtx())
@@ -536,7 +564,7 @@ func (m *Model) Count(where ...interface{}) (int, error) {
 // Exist does "SELECT 1 FROM ... LIMIT 1" statement for the model.
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) Exist(where ...interface{}) (bool, error) {
+func (m *Model) Exist(where ...any) (bool, error) {
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).Exist()
 	}
@@ -622,12 +650,22 @@ func (m *Model) UnionAll(unions ...*Model) *Model {
 // The parameter `limit` can be either one or two number, if passed two number is passed,
 // it then sets "LIMIT limit[0],limit[1]" statement for the model, or else it sets "LIMIT limit[0]"
 // statement.
+// Note: Negative values are treated as zero.
 func (m *Model) Limit(limit ...int) *Model {
 	model := m.getModel()
 	switch len(limit) {
 	case 1:
+		if limit[0] < 0 {
+			limit[0] = 0
+		}
 		model.limit = limit[0]
 	case 2:
+		if limit[0] < 0 {
+			limit[0] = 0
+		}
+		if limit[1] < 0 {
+			limit[1] = 0
+		}
 		model.start = limit[0]
 		model.limit = limit[1]
 	}
@@ -636,8 +674,12 @@ func (m *Model) Limit(limit ...int) *Model {
 
 // Offset sets the "OFFSET" statement for the model.
 // It only makes sense for some databases like SQLServer, PostgreSQL, etc.
+// Note: Negative values are treated as zero.
 func (m *Model) Offset(offset int) *Model {
 	model := m.getModel()
+	if offset < 0 {
+		offset = 0
+	}
 	model.offset = offset
 	return model
 }
@@ -652,10 +694,14 @@ func (m *Model) Distinct() *Model {
 // Page sets the paging number for the model.
 // The parameter `page` is started from 1 for paging.
 // Note that, it differs that the Limit function starts from 0 for "LIMIT" statement.
+// Note: Negative limit values are treated as zero.
 func (m *Model) Page(page, limit int) *Model {
 	model := m.getModel()
 	if page <= 0 {
 		page = 1
+	}
+	if limit < 0 {
+		limit = 0
 	}
 	model.start = (page - 1) * limit
 	model.limit = limit
@@ -665,9 +711,9 @@ func (m *Model) Page(page, limit int) *Model {
 // Having sets the having statement for the model.
 // The parameters of this function usage are as the same as function Where.
 // See Where.
-func (m *Model) Having(having interface{}, args ...interface{}) *Model {
+func (m *Model) Having(having any, args ...any) *Model {
 	model := m.getModel()
-	model.having = []interface{}{
+	model.having = []any{
 		having, args,
 	}
 	return model
@@ -680,7 +726,7 @@ func (m *Model) Having(having interface{}, args ...interface{}) *Model {
 // The parameter `limit1` specifies whether limits querying only one record if m.limit is not set.
 // The optional parameter `where` is the same as the parameter of Model.Where function,
 // see Model.Where.
-func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool, where ...interface{}) (Result, error) {
+func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool, where ...any) (Result, error) {
 	if len(where) > 0 {
 		return m.Where(where[0], where[1:]...).All()
 	}
@@ -700,7 +746,7 @@ func (m *Model) doGetAll(ctx context.Context, selectType SelectType, limit1 bool
 
 // doGetAllBySql does the select statement on the database.
 func (m *Model) doGetAllBySql(
-	ctx context.Context, selectType SelectType, sql string, args ...interface{},
+	ctx context.Context, selectType SelectType, sql string, args ...any,
 ) (result Result, err error) {
 
 	if result, err = m.getSelectResultFromCache(ctx, sql, args...); err != nil || result != nil {
@@ -731,7 +777,7 @@ func (m *Model) doGetAllBySql(
 
 func (m *Model) getFormattedSqlAndArgs(
 	ctx context.Context, selectType SelectType, limit1 bool,
-) (sqlWithHolder string, holderArgs []interface{}) {
+) (sqlWithHolder string, holderArgs []any) {
 	switch selectType {
 	case SelectTypeCount:
 		queryFields := "COUNT(1)"
@@ -742,8 +788,12 @@ func (m *Model) getFormattedSqlAndArgs(
 		}
 		// Raw SQL Model.
 		if m.rawSql != "" {
-			sqlWithHolder = fmt.Sprintf("SELECT %s FROM (%s) AS T", queryFields, m.rawSql)
-			return sqlWithHolder, nil
+			conditionWhere, conditionExtra, conditionArgs := m.formatCondition(ctx, false, true)
+			sqlWithHolder = fmt.Sprintf(
+				"SELECT %s FROM (%s%s) AS T",
+				queryFields, m.rawSql, conditionWhere+conditionExtra,
+			)
+			return sqlWithHolder, conditionArgs
 		}
 		conditionWhere, conditionExtra, conditionArgs := m.formatCondition(ctx, false, true)
 		sqlWithHolder = fmt.Sprintf("SELECT %s FROM %s%s", queryFields, m.tables, conditionWhere+conditionExtra)
@@ -773,7 +823,7 @@ func (m *Model) getFormattedSqlAndArgs(
 	}
 }
 
-func (m *Model) getHolderAndArgsAsSubModel(ctx context.Context) (holder string, args []interface{}) {
+func (m *Model) getHolderAndArgsAsSubModel(ctx context.Context) (holder string, args []any) {
 	holder, args = m.getFormattedSqlAndArgs(
 		ctx, SelectTypeDefault, false,
 	)
@@ -784,7 +834,7 @@ func (m *Model) getHolderAndArgsAsSubModel(ctx context.Context) (holder string, 
 func (m *Model) getAutoPrefix() string {
 	autoPrefix := ""
 	if gstr.Contains(m.tables, " JOIN ") {
-		autoPrefix = m.db.GetCore().QuoteWord(
+		autoPrefix = m.QuoteWord(
 			m.db.GetCore().guessPrimaryTableName(m.tablesInit),
 		)
 	}
@@ -794,7 +844,6 @@ func (m *Model) getAutoPrefix() string {
 func (m *Model) getFieldsAsStr() string {
 	var (
 		fieldsStr string
-		core      = m.db.GetCore()
 	)
 	for _, v := range m.fields {
 		field := gconv.String(v)
@@ -805,7 +854,7 @@ func (m *Model) getFieldsAsStr() string {
 			switch v.(type) {
 			case Raw, *Raw:
 			default:
-				field = core.QuoteString(field)
+				field = m.QuoteWord(field)
 			}
 		}
 		if fieldsStr != "" {
@@ -861,7 +910,7 @@ func (m *Model) getFieldsFiltered() string {
 		if len(newFields) > 0 {
 			newFields += ","
 		}
-		newFields += m.db.GetCore().QuoteWord(k)
+		newFields += m.QuoteWord(k)
 	}
 	return newFields
 }
@@ -872,7 +921,7 @@ func (m *Model) getFieldsFiltered() string {
 // The parameter `limit1` specifies whether limits querying only one record if m.limit is not set.
 func (m *Model) formatCondition(
 	ctx context.Context, limit1 bool, isCountStatement bool,
-) (conditionWhere string, conditionExtra string, conditionArgs []interface{}) {
+) (conditionWhere string, conditionExtra string, conditionArgs []any) {
 	var autoPrefix = m.getAutoPrefix()
 	// GROUP BY.
 	if m.groupBy != "" {
@@ -880,7 +929,7 @@ func (m *Model) formatCondition(
 	}
 	// WHERE
 	conditionWhere, conditionArgs = m.whereBuilder.Build()
-	softDeletingCondition := m.softTimeMaintainer().GetWhereConditionForDelete(ctx)
+	softDeletingCondition := m.softTimeMaintainer().GetDeleteCondition(ctx)
 	if m.rawSql != "" && conditionWhere != "" {
 		if gstr.ContainsI(m.rawSql, " WHERE ") {
 			conditionWhere = " AND " + conditionWhere
